@@ -151,7 +151,18 @@ export class OpenRouterClient {
         clearTimeout(timeoutId);
 
         if (response.ok) {
-          return (await response.json()) as { choices?: Array<{ message?: { content?: string } }>; model?: string; usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number } };
+          const json = (await response.json()) as {
+            error?: { message?: string; code?: number };
+            choices?: Array<{ message?: { content?: string } }>;
+            model?: string;
+            usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+          };
+
+          if (json.error || !json.choices || json.choices.length === 0) {
+            throw new Error(`OpenRouter Upstream Error: ${json.error?.message || 'No choices returned by model'}`);
+          }
+
+          return json;
         }
 
         const status = response.status;
