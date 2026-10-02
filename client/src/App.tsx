@@ -378,9 +378,12 @@ export const App: React.FC = () => {
     } else {
       try {
         setCameraStatus('STARTING');
-        await cameraService.startCamera(cameraVideoRef.current);
         setIsCameraActive(true);
+        await cameraService.startCamera(cameraVideoRef.current);
         setCameraStatus('ON');
+        if (cameraVideoRef.current) {
+          cameraService.attachPreview(cameraVideoRef.current);
+        }
       } catch (err: unknown) {
         const errMsg = (err as Error).message || 'Failed to start camera';
         setCameraError(errMsg);

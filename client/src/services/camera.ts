@@ -101,13 +101,16 @@ export class CameraCaptureService {
 
       this.activeStream = stream;
 
-      // Bind to preview video element if provided
-      if (previewEl) {
-        this.previewVideoElement = previewEl;
-        previewEl.srcObject = stream;
-        previewEl.muted = true;
-        previewEl.playsInline = true;
-        await previewEl.play().catch(console.warn);
+      // Bind to preview video element if provided or previously registered
+      const targetPreview = previewEl || this.previewVideoElement;
+      if (targetPreview) {
+        this.previewVideoElement = targetPreview;
+        targetPreview.srcObject = stream;
+        targetPreview.muted = true;
+        targetPreview.playsInline = true;
+        targetPreview.play().catch((err) => {
+          console.warn('Camera preview auto-play warning in startCamera:', err);
+        });
       }
 
       // Internal fallback video element for canvas capturing
@@ -151,15 +154,31 @@ export class CameraCaptureService {
   }
 
   /**
+   * Return the active MediaStream instance
+   */
+  public getStream(): MediaStream | null {
+    return this.activeStream;
+  }
+
+  /**
    * Bind an active video element for display
    */
   public attachPreview(previewEl: HTMLVideoElement | null): void {
+    if (!previewEl) return;
     this.previewVideoElement = previewEl;
-    if (previewEl && this.activeStream) {
-      previewEl.srcObject = this.activeStream;
+    if (this.activeStream) {
+      if (previewEl.srcObject !== this.activeStream) {
+        previewEl.srcObject = this.activeStream;
+      }
       previewEl.muted = true;
       previewEl.playsInline = true;
-      previewEl.play().catch(console.warn);
+      
+      const playPromise = previewEl.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((err) => {
+          console.warn('Camera preview video play warning:', err);
+        });
+      }
     }
   }
 

@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Camera, X, Minimize2, Maximize2, AlertCircle, RefreshCw } from 'lucide-react';
-import { CameraState } from '../services/camera.js';
+import { CameraState, cameraService } from '../services/camera.js';
 
 export interface CameraPreviewProps {
   isActive: boolean;
@@ -18,6 +18,16 @@ export const CameraPreview: React.FC<CameraPreviewProps> = ({
   videoRef
 }) => {
   const [isMinimized, setIsMinimized] = useState<boolean>(false);
+
+  // Ensure the local video stream is attached to the video element whenever mounted or active
+  useEffect(() => {
+    const videoEl = videoRef.current;
+    if (!videoEl) return;
+
+    if (isActive && cameraService.isActive()) {
+      cameraService.attachPreview(videoEl);
+    }
+  }, [isActive, status, isMinimized, videoRef]);
 
   // If camera is completely off and has no error, do not render preview
   if (status === 'OFF' && !isActive && !error) {
@@ -100,10 +110,17 @@ export const CameraPreview: React.FC<CameraPreviewProps> = ({
       <div className="camera-video-wrapper">
         <video
           ref={videoRef}
+          id="cameraPreview"
           className="camera-video-stream"
           autoPlay
           playsInline
           muted
+          onCanPlay={(e) => {
+            const video = e.currentTarget;
+            if (video.paused) {
+              video.play().catch(console.warn);
+            }
+          }}
         />
 
         {/* Starting / Loading Overlay */}

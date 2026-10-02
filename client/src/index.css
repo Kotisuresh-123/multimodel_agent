@@ -815,6 +815,7 @@ button:focus-visible {
   position: relative;
   width: 100%;
   aspect-ratio: 16 / 10;
+  min-height: 180px;
   background: #000000;
   overflow: hidden;
 }
@@ -822,6 +823,7 @@ button:focus-visible {
 .camera-video-stream {
   width: 100%;
   height: 100%;
+  display: block;
   object-fit: cover;
   transform: scaleX(-1); /* Mirror camera for natural user experience */
 }
