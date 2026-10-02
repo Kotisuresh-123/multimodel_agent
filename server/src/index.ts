@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { config, validateEnvironment } from './config/env.js';
 import { logger } from './utils/logger.js';
@@ -17,9 +18,9 @@ const app = express();
 // Validate configuration
 validateEnvironment();
 
-// Middleware
+// Middleware: allow local dev, Vercel frontend, Render, and production clients
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:5000'],
+  origin: true,
   credentials: true
 }));
 
@@ -36,8 +37,15 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'healthy', timestamp: Date.now() });
 });
 
-// Serve frontend in production if built
-const clientDistPath = path.resolve(__dirname, '../../client/dist');
+// Resolve client dist path across development (src/) and compiled (dist/server/src/) structures
+const candidateDistPaths = [
+  path.resolve(__dirname, '../../client/dist'),
+  path.resolve(__dirname, '../../../../client/dist'),
+  path.resolve(process.cwd(), 'client/dist'),
+  path.resolve(process.cwd(), '../client/dist')
+];
+const clientDistPath = candidateDistPaths.find(p => fs.existsSync(path.join(p, 'index.html'))) || candidateDistPaths[0];
+
 app.use(express.static(clientDistPath));
 
 app.get('*', (req, res, next) => {
@@ -46,19 +54,19 @@ app.get('*', (req, res, next) => {
     return;
   }
   const indexPath = path.join(clientDistPath, 'index.html');
-  res.sendFile(indexPath, (err) => {
-    if (err) {
-      // In development, client is served by Vite on port 3000
-      res.status(200).send('Voice Assistant API Server is active. In development mode, open the Vite client at http://localhost:3000');
-    }
-  });
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.status(200).send('Voice Assistant API Server is active. In development mode, open the Vite client at http://localhost:3000');
+  }
 });
 
 // Error handling middleware
 app.use(errorHandler);
 
-const server = app.listen(config.port, () => {
-  logger.info(`Voice Assistant Backend running on http://localhost:${config.port}`);
+const server = app.listen(config.port, '0.0.0.0', () => {
+  logger.info(`Voice Assistant Backend running on http://0.0.0.0:${config.port}`);
+  logger.info(`Serving static client bundle from: ${clientDistPath}`);
   logger.info(`Primary Nemotron Model: ${config.primaryModel}`);
   logger.info(`Vision Model: ${config.visionModel}`);
 });

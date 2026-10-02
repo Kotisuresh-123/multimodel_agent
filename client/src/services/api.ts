@@ -1,7 +1,9 @@
 import { ChatRequestPayload, ModelResponsePayload, DocumentUploadResponse, SystemStatusResponse } from '../../../shared/types/index.js';
 
 export class ApiService {
-  private baseUrl = '/api';
+  private baseUrl = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL)
+    ? `${import.meta.env.VITE_API_URL.replace(/\/$/, '')}/api`
+    : '/api';
 
   public async sendChatTurn(payload: ChatRequestPayload, signal?: AbortSignal): Promise<ModelResponsePayload> {
     const response = await fetch(`${this.baseUrl}/chat`, {

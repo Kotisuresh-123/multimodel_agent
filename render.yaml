@@ -1,15 +1,14 @@
 services:
   - type: web
     name: nemotron-multimodal-assistant
-    env: node
+    runtime: node
     plan: free
     buildCommand: npm install && npm run build
     startCommand: npm start
+    healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PORT
-        value: 5000
       - key: OPENROUTER_MODEL
         value: nvidia/nemotron-3-ultra-550b-a55b:free
       - key: OPENROUTER_VISION_MODEL
