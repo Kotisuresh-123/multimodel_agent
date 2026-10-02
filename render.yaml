@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: nemotron-multimodal-assistant
+    env: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: OPENROUTER_MODEL
+        value: nvidia/nemotron-3-ultra-550b-a55b:free
+      - key: OPENROUTER_VISION_MODEL
+        value: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free
+      - key: OPENROUTER_API_KEY
+        sync: false
