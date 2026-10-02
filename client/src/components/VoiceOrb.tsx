@@ -52,6 +52,12 @@ export const VoiceOrb: React.FC<VoiceOrbProps> = ({
       subLabel = 'Searching relevant sections and context';
       ariaLabel = 'Reading document.';
       break;
+    case 'ANALYZING_CAMERA':
+      stateClass = 'orb-analyzing';
+      primaryLabel = 'Looking through camera...';
+      subLabel = 'Analyzing what you are showing or holding';
+      ariaLabel = 'Analyzing camera feed.';
+      break;
     case 'SPEAKING':
       stateClass = 'orb-speaking';
       primaryLabel = 'Speaking...';

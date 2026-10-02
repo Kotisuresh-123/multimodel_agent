@@ -15,9 +15,9 @@ chatRouter.post('/', async (req: Request, res: Response, next: NextFunction): Pr
       return;
     }
 
-    if (!payload.message && !payload.image?.dataUrl && !payload.screenshot?.dataUrl && !payload.documentId) {
+    if (!payload.message && !payload.image?.dataUrl && !payload.screenshot?.dataUrl && !payload.cameraFrame?.dataUrl && !payload.documentId) {
       res.status(400).json({
-        error: { message: 'Must provide either a text message, image, screenshot, or document reference.' }
+        error: { message: 'Must provide either a text message, image, screenshot, camera frame, or document reference.' }
       });
       return;
     }

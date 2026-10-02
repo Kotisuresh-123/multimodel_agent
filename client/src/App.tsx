@@ -7,10 +7,12 @@ import { AgentStatus, Message, DocumentAttachment, SystemStatusResponse } from '
 import { speechService } from './services/stt.js';
 import { ttsService } from './services/tts.js';
 import { screenService } from './services/screen.js';
+import { cameraService, CameraState } from './services/camera.js';
 import { apiService } from './services/api.js';
 import { VoiceOrb } from './components/VoiceOrb.js';
 import { ActionDock } from './components/ActionDock.js';
 import { AttachmentPreviews } from './components/AttachmentPreviews.js';
+import { CameraPreview } from './components/CameraPreview.js';
 import { TranscriptPanel } from './components/TranscriptPanel.js';
 import { SettingsModal } from './components/SettingsModal.js';
 import { ErrorBanner } from './components/ErrorBanner.js';
@@ -23,7 +25,13 @@ export const App: React.FC = () => {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null);
   const [isScreenSharing, setIsScreenSharing] = useState<boolean>(false);
+  const [isCameraActive, setIsCameraActive] = useState<boolean>(false);
+  const [cameraStatus, setCameraStatus] = useState<CameraState>('OFF');
+  const [cameraError, setCameraError] = useState<string | null>(null);
   const [activeDocument, setActiveDocument] = useState<DocumentAttachment | null>(null);
+
+  // Camera video ref
+  const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
 
   // Panels & Modals
   const [isTranscriptOpen, setIsTranscriptOpen] = useState<boolean>(false);
@@ -83,6 +91,7 @@ export const App: React.FC = () => {
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      cameraService.stopCamera();
       screenService.stopScreenSharing();
       ttsService.cancel();
       speechService.stop();
@@ -115,7 +124,7 @@ export const App: React.FC = () => {
    * Sends user turn to backend orchestrator and handles voice response
    */
   const handleUserTurn = useCallback(async (userText: string) => {
-    if (!userText.trim() && !imagePreview && !screenshotPreview && !activeDocument && !isScreenSharing) {
+    if (!userText.trim() && !imagePreview && !screenshotPreview && !activeDocument && !isScreenSharing && !isCameraActive) {
       return;
     }
 
@@ -124,9 +133,21 @@ export const App: React.FC = () => {
     setInterimTranscript('');
     speechService.stop();
 
+    // Check if camera frame should be captured (only when visual context is needed or user asks about camera/objects)
+    let effectiveCameraFrame: string | null = null;
+    if (isCameraActive) {
+      const needsVisual = cameraService.shouldCaptureForQuery(userText);
+      if (needsVisual) {
+        effectiveCameraFrame = cameraService.captureLatestFrame();
+        if (effectiveCameraFrame) {
+          setCameraStatus('PROCESSING');
+        }
+      }
+    }
+
     // Check if screen sharing frame should be snapped
     let effectiveScreenshot = screenshotPreview;
-    if (!effectiveScreenshot && isScreenSharing) {
+    if (!effectiveScreenshot && isScreenSharing && !effectiveCameraFrame) {
       const frame = screenService.captureFrameFromActiveShare();
       if (frame) {
         effectiveScreenshot = frame;
@@ -134,7 +155,9 @@ export const App: React.FC = () => {
     }
 
     // Determine initial analyzing status
-    if (effectiveScreenshot) {
+    if (effectiveCameraFrame) {
+      setStatus('ANALYZING_CAMERA');
+    } else if (effectiveScreenshot) {
       setStatus('ANALYZING_SCREEN');
     } else if (imagePreview) {
       setStatus('ANALYZING_IMAGE');
@@ -149,7 +172,7 @@ export const App: React.FC = () => {
     const newUserMsg: Message = {
       id: userMessageId,
       role: 'user',
-      content: userText || (imagePreview ? '[Uploaded Image]' : effectiveScreenshot ? '[Captured Screenshot]' : '[Document Query]'),
+      content: userText || (effectiveCameraFrame ? '[Camera View Question]' : imagePreview ? '[Uploaded Image]' : effectiveScreenshot ? '[Captured Screenshot]' : '[Document Query]'),
       timestamp: Date.now()
     };
     setMessages(prev => [...prev, newUserMsg]);
@@ -166,9 +189,16 @@ export const App: React.FC = () => {
         image: imagePreview ? { dataUrl: imagePreview } : undefined,
         screenshot: effectiveScreenshot ? { dataUrl: effectiveScreenshot } : undefined,
         screenActive: isScreenSharing,
+        cameraFrame: effectiveCameraFrame ? { dataUrl: effectiveCameraFrame } : undefined,
+        cameraActive: isCameraActive,
         documentId: activeDocument?.id,
         voiceMode: true
       }, controller.signal);
+
+      // Reset camera status to ON if active
+      if (isCameraActive) {
+        setCameraStatus('ON');
+      }
 
       // Append assistant message to transcript
       const assistantMsg: Message = {
@@ -203,6 +233,10 @@ export const App: React.FC = () => {
         setStatus('IDLE');
       }
     } catch (err: unknown) {
+      if (isCameraActive) {
+        setCameraStatus('ON');
+      }
+
       if ((err as Error).name === 'AbortError' || (err as Error).message.includes('interrupted')) {
         console.log('Turn aborted by interruption.');
         setStatus('IDLE');
@@ -216,7 +250,7 @@ export const App: React.FC = () => {
     } finally {
       activeAbortController.current = null;
     }
-  }, [imagePreview, screenshotPreview, activeDocument, isScreenSharing, handleInterrupt]);
+  }, [imagePreview, screenshotPreview, activeDocument, isScreenSharing, isCameraActive, handleInterrupt]);
 
   /**
    * Start Microphone Listening
@@ -332,6 +366,32 @@ export const App: React.FC = () => {
   }, [isScreenSharing]);
 
   /**
+   * Handle Camera Toggle
+   */
+  const handleToggleCamera = useCallback(async () => {
+    setError(null);
+    setCameraError(null);
+    if (isCameraActive) {
+      cameraService.stopCamera();
+      setIsCameraActive(false);
+      setCameraStatus('OFF');
+    } else {
+      try {
+        setCameraStatus('STARTING');
+        await cameraService.startCamera(cameraVideoRef.current);
+        setIsCameraActive(true);
+        setCameraStatus('ON');
+      } catch (err: unknown) {
+        const errMsg = (err as Error).message || 'Failed to start camera';
+        setCameraError(errMsg);
+        setError(errMsg);
+        setCameraStatus('ERROR');
+        setIsCameraActive(false);
+      }
+    }
+  }, [isCameraActive]);
+
+  /**
    * Handle Document Selection
    */
   const handleDocumentSelect = useCallback(async (file: File) => {
@@ -360,6 +420,10 @@ export const App: React.FC = () => {
    */
   const handleResetSession = useCallback(async () => {
     handleInterrupt();
+    cameraService.stopCamera();
+    setIsCameraActive(false);
+    setCameraStatus('OFF');
+    setCameraError(null);
     setImagePreview(null);
     setScreenshotPreview(null);
     setActiveDocument(null);
@@ -425,6 +489,12 @@ export const App: React.FC = () => {
             </div>
           )}
 
+          {isCameraActive && (
+            <div className="badge camera-active">
+              <span>● Live Camera</span>
+            </div>
+          )}
+
           <button
             type="button"
             className="transcript-toggle-btn"
@@ -446,15 +516,26 @@ export const App: React.FC = () => {
           onInterrupt={handleInterrupt}
         />
 
+        {/* Local Camera Live Preview */}
+        <CameraPreview
+          isActive={isCameraActive}
+          status={cameraStatus}
+          error={cameraError}
+          onStop={handleToggleCamera}
+          videoRef={cameraVideoRef}
+        />
+
         {/* Attachment Preview Tray */}
         <AttachmentPreviews
           imagePreview={imagePreview}
           screenshotPreview={screenshotPreview}
           isScreenSharing={isScreenSharing}
+          isCameraActive={isCameraActive}
           activeDocument={activeDocument}
           onClearImage={() => setImagePreview(null)}
           onClearScreenshot={() => setScreenshotPreview(null)}
           onStopScreenShare={handleToggleScreenShare}
+          onStopCamera={handleToggleCamera}
           onClearDocument={() => setActiveDocument(null)}
         />
       </main>
@@ -463,10 +544,13 @@ export const App: React.FC = () => {
       <ActionDock
         status={status}
         isScreenSharing={isScreenSharing}
+        isCameraActive={isCameraActive}
+        cameraStatus={cameraStatus}
         onMicClick={handleMicToggle}
         onImageSelect={handleImageSelect}
         onCaptureScreenshot={handleCaptureScreenshot}
         onToggleScreenShare={handleToggleScreenShare}
+        onToggleCamera={handleToggleCamera}
         onDocumentSelect={handleDocumentSelect}
         onSendTextMessage={handleUserTurn}
         onOpenSettings={() => setIsSettingsOpen(true)}

@@ -120,3 +120,63 @@ test('VisionAnalyzer validates data URL structure and bounds', () => {
   const invalid = analyzer.validateImageDataUrl('not-an-image');
   assert.equal(invalid.isValid, false);
 });
+
+test('IntentRouter routes camera analysis when camera frame is present', () => {
+  const router = new IntentRouter();
+  const decision = router.route({
+    message: 'What am I holding?',
+    hasImage: false,
+    hasScreenshot: false,
+    hasCameraFrame: true,
+    isCameraActive: true,
+    hasDocument: false
+  });
+
+  assert.equal(decision.intent, 'CAMERA_ANALYSIS');
+  assert.equal(decision.modality, 'camera');
+  assert.equal(decision.requiresVision, true);
+});
+
+test('IntentRouter detects missing camera when user asks what they are holding without camera', () => {
+  const router = new IntentRouter();
+  const decision = router.route({
+    message: 'What am I holding?',
+    hasImage: false,
+    hasScreenshot: false,
+    hasCameraFrame: false,
+    isCameraActive: false,
+    hasDocument: false
+  });
+
+  assert.equal(decision.intent, 'CAMERA_ANALYSIS');
+  assert.equal(decision.requiresVision, false);
+  assert.ok(decision.missingPrerequisiteNotice?.includes('camera'));
+});
+
+test('IntentRouter keeps unrelated questions in general reasoning even when camera is active', () => {
+  const router = new IntentRouter();
+  const decision = router.route({
+    message: 'What is the capital of France?',
+    hasImage: false,
+    hasScreenshot: false,
+    hasCameraFrame: false,
+    isCameraActive: true,
+    hasDocument: false
+  });
+
+  assert.equal(decision.intent, 'GENERAL_REASONING');
+  assert.equal(decision.modality, 'text');
+  assert.equal(decision.requiresVision, false);
+});
+
+test('VisionAnalyzer formats camera message with specialized prompt context', () => {
+  const analyzer = new VisionAnalyzer();
+  const fakeDataUrl = 'data:image/jpeg;base64,/9j/fake';
+  const msg = analyzer.formatVisionMessage('What color is my shirt?', fakeDataUrl, 'camera');
+
+  assert.equal(msg.role, 'user');
+  assert.equal(msg.content.length, 2);
+  const textContent = (msg.content[0] as { type: 'text'; text: string }).text;
+  assert.ok(textContent.includes('What color is my shirt?'));
+  assert.ok(textContent.includes('camera view'));
+});

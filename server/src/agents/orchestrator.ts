@@ -55,6 +55,8 @@ export class AgentOrchestrator {
       const hasImage = Boolean(payload.image?.dataUrl);
       const hasScreenshot = Boolean(payload.screenshot?.dataUrl);
       const isScreenActive = Boolean(payload.screenActive);
+      const hasCameraFrame = Boolean(payload.cameraFrame?.dataUrl);
+      const isCameraActive = Boolean(payload.cameraActive);
 
       // Check document context
       const docId = payload.documentId || conversationMemory.getActiveDocument(convId);
@@ -71,6 +73,8 @@ export class AgentOrchestrator {
         hasImage,
         hasScreenshot,
         isScreenActive,
+        hasCameraFrame,
+        isCameraActive,
         hasDocument
       });
 
@@ -128,9 +132,12 @@ export class AgentOrchestrator {
 
       // 4. Handle Modality Specific Context Injection
       let activeDataUrl: string | undefined;
-      let sourceType: 'image' | 'screenshot' | 'screen_share' = 'image';
+      let sourceType: 'image' | 'screenshot' | 'screen_share' | 'camera' = 'image';
 
-      if (hasScreenshot) {
+      if (hasCameraFrame) {
+        activeDataUrl = payload.cameraFrame?.dataUrl;
+        sourceType = 'camera';
+      } else if (hasScreenshot) {
         activeDataUrl = payload.screenshot?.dataUrl;
         sourceType = 'screenshot';
       } else if (hasImage) {

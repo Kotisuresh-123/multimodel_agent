@@ -4,6 +4,8 @@ import {
   MicOff,
   Image as ImageIcon,
   Camera,
+  Video,
+  VideoOff,
   Monitor,
   FileUp,
   MessageSquare,
@@ -16,10 +18,13 @@ import { AgentStatus } from '../../../shared/types/index.js';
 interface ActionDockProps {
   status: AgentStatus;
   isScreenSharing: boolean;
+  isCameraActive: boolean;
+  cameraStatus?: string;
   onMicClick: () => void;
   onImageSelect: (file: File) => void;
   onCaptureScreenshot: () => void;
   onToggleScreenShare: () => void;
+  onToggleCamera: () => void;
   onDocumentSelect: (file: File) => void;
   onSendTextMessage: (text: string) => void;
   onOpenSettings: () => void;
@@ -29,10 +34,13 @@ interface ActionDockProps {
 export const ActionDock: React.FC<ActionDockProps> = ({
   status,
   isScreenSharing,
+  isCameraActive,
+  cameraStatus: _cameraStatus,
   onMicClick,
   onImageSelect,
   onCaptureScreenshot,
   onToggleScreenShare,
+  onToggleCamera,
   onDocumentSelect,
   onSendTextMessage,
   onOpenSettings,
@@ -120,6 +128,17 @@ export const ActionDock: React.FC<ActionDockProps> = ({
           aria-label="Capture screenshot"
         >
           <Camera size={20} />
+        </button>
+
+        {/* Live Camera Toggle */}
+        <button
+          type="button"
+          className={`dock-btn ${isCameraActive ? 'active' : ''}`}
+          onClick={onToggleCamera}
+          title={isCameraActive ? 'Stop Camera' : 'Start Camera'}
+          aria-label={isCameraActive ? 'Stop camera' : 'Start camera'}
+        >
+          {isCameraActive ? <Video size={20} /> : <VideoOff size={20} />}
         </button>
 
         {/* Screen Sharing Toggle */}

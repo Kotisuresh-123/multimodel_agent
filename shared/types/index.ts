@@ -2,7 +2,7 @@
  * Shared Type Definitions for Multimodal Voice Assistant
  */
 
-export type ModalityType = 'text' | 'image' | 'screen' | 'document';
+export type ModalityType = 'text' | 'image' | 'screen' | 'document' | 'camera';
 
 export type AgentStatus = 
   | 'IDLE' 
@@ -11,6 +11,7 @@ export type AgentStatus =
   | 'ANALYZING_IMAGE' 
   | 'ANALYZING_SCREEN' 
   | 'ANALYZING_DOCUMENT' 
+  | 'ANALYZING_CAMERA' 
   | 'SPEAKING' 
   | 'ERROR';
 
@@ -26,6 +27,13 @@ export interface ImageAttachment {
 
 export interface ScreenshotAttachment {
   type: 'screenshot';
+  id: string;
+  timestamp: number;
+  dataUrl: string;
+}
+
+export interface CameraAttachment {
+  type: 'camera';
   id: string;
   timestamp: number;
   dataUrl: string;
@@ -50,7 +58,7 @@ export interface DocumentAttachment {
   totalPages?: number;
 }
 
-export type Attachment = ImageAttachment | ScreenshotAttachment | DocumentAttachment;
+export type Attachment = ImageAttachment | ScreenshotAttachment | CameraAttachment | DocumentAttachment;
 
 export interface Message {
   id: string;
@@ -85,6 +93,10 @@ export interface ChatRequestPayload {
     dataUrl: string;
   };
   screenActive?: boolean;
+  cameraFrame?: {
+    dataUrl: string;
+  };
+  cameraActive?: boolean;
   documentId?: string;
   voiceMode?: boolean;
 }

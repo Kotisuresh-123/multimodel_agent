@@ -1,15 +1,17 @@
 import React from 'react';
-import { X, Monitor, FileText } from 'lucide-react';
+import { X, Monitor, FileText, Video } from 'lucide-react';
 import { DocumentAttachment } from '../../../shared/types/index.js';
 
 interface AttachmentPreviewsProps {
   imagePreview: string | null;
   screenshotPreview: string | null;
   isScreenSharing: boolean;
+  isCameraActive?: boolean;
   activeDocument: DocumentAttachment | null;
   onClearImage: () => void;
   onClearScreenshot: () => void;
   onStopScreenShare: () => void;
+  onStopCamera?: () => void;
   onClearDocument: () => void;
 }
 
@@ -17,13 +19,15 @@ export const AttachmentPreviews: React.FC<AttachmentPreviewsProps> = ({
   imagePreview,
   screenshotPreview,
   isScreenSharing,
+  isCameraActive,
   activeDocument,
   onClearImage,
   onClearScreenshot,
   onStopScreenShare,
+  onStopCamera,
   onClearDocument
 }) => {
-  const hasAnyAttachment = Boolean(imagePreview || screenshotPreview || isScreenSharing || activeDocument);
+  const hasAnyAttachment = Boolean(imagePreview || screenshotPreview || isScreenSharing || isCameraActive || activeDocument);
 
   if (!hasAnyAttachment) return null;
 
@@ -77,6 +81,25 @@ export const AttachmentPreviews: React.FC<AttachmentPreviewsProps> = ({
           >
             <X size={15} />
           </button>
+        </div>
+      )}
+
+      {/* Active Camera Badge */}
+      {isCameraActive && (
+        <div className="attachment-chip" style={{ borderColor: 'rgba(59, 130, 246, 0.4)' }}>
+          <Video size={16} color="#3b82f6" />
+          <span style={{ color: '#93c5fd' }}>Camera Active</span>
+          {onStopCamera && (
+            <button
+              type="button"
+              className="chip-remove-btn"
+              onClick={onStopCamera}
+              title="Stop Camera"
+              aria-label="Stop camera"
+            >
+              <X size={15} />
+            </button>
+          )}
         </div>
       )}
 

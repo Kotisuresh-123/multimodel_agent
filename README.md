@@ -16,6 +16,7 @@ A real-time, production-quality conversational multimodal voice assistant powere
 9. [Running in Development Mode](#-running-in-development-mode)
 10. [Building & Running in Production](#-building--running-in-production)
 11. [How Multimodal Analysis Works](#-how-multimodal-analysis-works)
+    - [Live Camera Perception](#live-camera-perception)
     - [Image Analysis](#image-analysis)
     - [Screenshot Capture & Analysis](#screenshot-capture--analysis)
     - [Permission-Based Screen Sharing](#permission-based-screen-sharing)
@@ -31,8 +32,9 @@ A real-time, production-quality conversational multimodal voice assistant powere
 
 The **Multimodal AI Voice Assistant** provides a hands-free conversational voice experience:
 - **Natural Voice Interaction**: Speak directly to the assistant; receive concise, articulate spoken responses.
+- **Real-Time Camera Awareness**: Turn on your camera, view a local live preview, and ask what you're holding, what color an object is, or to read physical text.
 - **Instant Interruption**: If the assistant is speaking, start talking or tap the orb to immediately cut off speech and capture your new intent.
-- **Multimodal Intelligence**: Seamlessly incorporate images, on-demand screenshots, active screen share streams, or documents (PDF, DOCX, TXT) into your voice conversation.
+- **Multimodal Intelligence**: Seamlessly incorporate live camera, images, on-demand screenshots, active screen share streams, or documents (PDF, DOCX, TXT) into your voice conversation.
 - **Zero API Key Leakage**: API credentials remain strictly confined to the backend server environment. The frontend client never has access to secrets.
 
 ---
@@ -42,6 +44,7 @@ The **Multimodal AI Voice Assistant** provides a hands-free conversational voice
 ```
 [ CAPTURE LAYER ]
   │── Microphone (Browser Web Audio / MediaStream)
+  │── Live Camera (Local getUserMedia video-only stream & PiP preview)
   │── Screenshot Capture (Single-frame DisplayMedia capture)
   │── Screen Sharing (Continuous permission-based stream)
   │── Image Upload (Drag-and-drop / File input for PNG, JPG, WEBP)
@@ -50,12 +53,13 @@ The **Multimodal AI Voice Assistant** provides a hands-free conversational voice
         ▼
 [ PERCEPTION LAYER ]
   │── Speech-to-Text Service (Web Speech API with interim results & speech onset detection)
+  │── Camera Capture Service (On-demand single-frame capture, downscaling & JPEG compression)
   │── Document Extraction & Chunking (pdf-parse, mammoth, token estimation, semantic scoring)
   └── Image / Vision Formatter (Base64 data URL validation & size control)
         │
         ▼
 [ AGENT ORCHESTRATION LAYER ]
-  │── Intent Router (Detects image, screen, document, or general reasoning intent)
+  │── Intent Router (Detects camera, image, screen, document, or general reasoning intent)
   │── Conversation Memory (Sliding window + automatic contextual compaction)
   │── Model Router (Directs queries to Nemotron or Vision model dynamically)
   └── Request Deduplication & Abort Controller (Instant in-flight cancellation)
@@ -82,21 +86,27 @@ The **Multimodal AI Voice Assistant** provides a hands-free conversational voice
 ## 🚀 Key Features
 
 1. **Central Voice Orb**:
-   - Dynamic animated states: `IDLE`, `LISTENING`, `PROCESSING`, `ANALYZING_IMAGE`, `ANALYZING_SCREEN`, `ANALYZING_DOCUMENT`, `SPEAKING`, and `ERROR`.
+   - Dynamic animated states: `IDLE`, `LISTENING`, `PROCESSING`, `ANALYZING_IMAGE`, `ANALYZING_SCREEN`, `ANALYZING_DOCUMENT`, `ANALYZING_CAMERA`, `SPEAKING`, and `ERROR`.
    - Equalizer frequency bars during speech playback.
    - Interim speech bubble displaying transcribed words in real-time.
-2. **Instant Interruption Handling**:
+2. **Real-Time Camera Awareness**:
+   - One-click Start/Stop camera button in the floating action dock.
+   - Local, mirrored Picture-in-Picture live preview card with minimize and expand controls.
+   - Clear status indicators: `OFF`, `STARTING`, `ON`, `PROCESSING`, and `ERROR`.
+   - **Zero Continuous Streaming**: The camera stream remains 100% local in the browser. Only a single optimized frame is captured on demand when you ask a visual question.
+   - Preserves normal fast voice/text answers for non-visual questions even while the camera is running.
+3. **Instant Interruption Handling**:
    - `speechSynthesis.cancel()` halts audio immediately.
    - Dispatches `/api/chat/interrupt` to terminate in-flight OpenRouter requests.
    - Switches instantly to `LISTENING` to capture the new turn without robotic filler apologies.
-3. **Smart Model Routing**:
+4. **Smart Model Routing**:
    - Text & Document QA routes to **NVIDIA Nemotron 3 Ultra**.
-   - Visual queries route to **NVIDIA Nemotron 3 Nano Omni Vision** or **OpenRouter Multimodal Router**.
+   - Visual queries (Camera, Image, Screen) route to **NVIDIA Nemotron 3 Nano Omni Vision**.
    - Transient 503/429 errors trigger controlled exponential backoff and seamless fallback to companion Nemotron models.
-4. **Document Intelligence**:
+5. **Document Intelligence**:
    - Upload PDF, DOCX, or TXT documents up to 15MB.
    - In-memory chunking with overlap and relevance keyword scoring. Only relevant excerpts are passed into inference context.
-5. **Screen Perception**:
+6. **Screen Perception**:
    - One-click screen capture (snaps current screen/browser tab).
    - Live permission-based screen sharing with active indicator.
    - Say: *"What is happening on my screen?"* or *"Read the visible error"* to analyze on demand without flooding the API with continuous frames.
@@ -232,6 +242,23 @@ Open your browser to:
 
 ## 📷 How Multimodal Analysis Works
 
+### Live Camera Perception
+1. Click the **Camera** (`Video`) icon in the bottom action dock to turn on your camera.
+2. The browser requests video permissions (`navigator.mediaDevices.getUserMedia({ video: true, audio: false })`). Only video is requested; microphone handling remains with the existing speech service.
+3. A local Picture-in-Picture preview card appears in the bottom right corner showing your mirrored webcam stream with status `LIVE CAMERA`.
+4. **Bandwidth & Rate-Limit Safe**: The camera does **NOT** stream continuous frames (30fps / 15fps) to OpenRouter or the backend.
+5. When you ask a question requiring visual context:
+   - *"What am I holding?"*
+   - *"What color is my shirt?"*
+   - *"Can you see what I'm showing you?"*
+   - *"Read the text on this paper"*
+   - *"Describe what is happening in front of me"*
+   - *"Is this object damaged?"*
+6. The client captures the **latest single frame** locally, scales it to a max resolution (1280x720, configurable via `CAMERA_ANALYSIS_MAX_WIDTH` and `CAMERA_ANALYSIS_MAX_HEIGHT`), compresses it to JPEG (`CAMERA_IMAGE_QUALITY=0.82`), and attaches it to the turn.
+7. The existing **NVIDIA Nemotron 3 Nano Omni** multimodal model analyzes the frame in a single unified inference pass and speaks the response through the existing TTS pipeline.
+8. If you ask a non-visual question while the camera is on (e.g., *"What is the capital of France?"* or *"Explain recursion"*), no camera frame is captured or uploaded, ensuring zero extra latency.
+9. Click **Stop Camera** or close the preview card anytime to release the webcam hardware tracks.
+
 ### Image Analysis
 1. User clicks the **Image Upload** icon in the action dock or drops an image (PNG, JPG, WEBP).
 2. The client renders an attachment chip with thumbnail preview.
@@ -250,7 +277,7 @@ Open your browser to:
 1. User clicks **Screen Sharing** in the dock.
 2. An active status badge displays: `● Live Screen Sharing`.
 3. The assistant does **NOT** stream continuous frames to OpenRouter (preserving bandwidth and token limits).
-4. When the user asks: *"What am I looking at?"*, a single frame is extracted on demand and analyzed.
+4. When the user asks: *"What am I looking at on my screen?"*, a single frame is extracted on demand and analyzed.
 5. User can stop screen sharing anytime via the dock button or browser banner.
 
 ### Document Processing & QA
@@ -283,14 +310,17 @@ The conversation continues naturally without meta-apologies like *"Sure, I under
 ## 🧪 Testing & Verification
 
 ### Running Automated Backend Tests
-Run the unit test suite covering text cleaning, intent routing, memory compaction, document processing, and model capabilities:
+Run the unit test suite covering text cleaning, intent routing, memory compaction, document processing, camera awareness, and model capabilities:
 ```bash
 npm test
 ```
-All 9 unit test suites execute and validate:
+All 13 unit test suites execute and validate:
 - Markdown removal and robotic filler elimination
 - Model vision capability detection
-- Intent detection for images, screens, documents, and general queries
+- Intent detection for camera, images, screens, documents, and general queries
+- Camera routing when camera frame is present vs when camera is missing
+- Unrelated questions routing to general reasoning without vision overhead when camera is active
+- Vision analyzer prompt formatting for camera feeds
 - Conversation memory sliding window & compaction
 - Document text extraction and chunk selection
 - Vision data URL validation
@@ -299,6 +329,7 @@ All 9 unit test suites execute and validate:
 
 ## 🛡️ Privacy & Security Considerations
 
+- **Camera Feed**: Access is strictly user-controlled via explicit click on the Camera button. Never activated silently. Frames are held locally in browser memory and only snapped on demand when you ask visual questions. No permanent image storage or video streaming.
 - **Microphone**: Active only when the orb/dock button is in `LISTENING` state. Never recorded secretly.
 - **Screen Capture**: Permission is required via standard browser `getDisplayMedia` dialog. Frames are captured on-demand only.
 - **Document Handling**: Files are processed in memory and retained temporarily in session memory. No permanent disk persistence.
@@ -310,8 +341,10 @@ All 9 unit test suites execute and validate:
 
 | Issue | Cause | Solution |
 | :--- | :--- | :--- |
+| **"Camera permission was denied"** | Browser blocked camera access | Click the camera/lock icon in your browser URL bar, set Camera to "Allow", and click Start Camera again. |
+| **"Camera is in use by another application"** | Another program (Zoom, Teams, etc.) is holding the camera | Close other apps using the webcam and click Start Camera again. |
 | **"Microphone access was denied"** | Browser permissions blocked mic | Click the lock/settings icon in the browser URL bar and allow microphone permissions. |
-| **"Screen capture permission was cancelled"** | User dismissed browser screen picker | Click the camera or monitor icon again and select a window/screen to share. |
+| **"Screen capture permission was cancelled"** | User dismissed browser screen picker | Click the screenshot or monitor icon again and select a window/screen to share. |
 | **"The AI service is temporarily busy (429/503)"** | Upstream OpenRouter rate limit or provider overload | The system automatically retries with exponential backoff and switches to companion Nemotron models. Retry after a few seconds. |
 | **STT not working in Firefox** | Firefox lacks default Web Speech STT | Use Chrome, Edge, or Safari for native voice recognition, or use the built-in Text Input fallback. |
 | **Offline Banner Visible** | Network disconnected | Check your internet connection. Voice recognition and remote Nemotron inference require network access. |
